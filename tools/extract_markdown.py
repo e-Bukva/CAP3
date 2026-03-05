@@ -19,7 +19,7 @@ from openai import OpenAI
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.gpt_prompts import EXTRACT_MARKDOWN_PROMPT, get_extract_markdown_prompt
-from tools.file_utils import PATHS, ensure_dir
+from tools.file_utils import PATHS, ensure_dir, strip_markdown_wrapper
 
 load_dotenv()
 
@@ -79,11 +79,7 @@ def extract_markdown_from_pdf(pdf_path: Path, api_key: str, model: str) -> dict:
     if not text_content:
         raise RuntimeError("Не найден output_text в content")
 
-    markdown = text_content["text"].strip()
-    if markdown.startswith("```markdown"):
-        markdown = markdown[len("```markdown\n"):].rstrip("`").rstrip()
-    elif markdown.startswith("```"):
-        markdown = markdown[4:].rstrip("`").rstrip()
+    markdown = strip_markdown_wrapper(text_content["text"])
 
     return {
         "markdown": markdown,
@@ -151,11 +147,7 @@ def extract_markdown_from_text(file_path: Path, api_key: str, model: str) -> dic
     if not output_text:
         raise RuntimeError("Не найден output_text")
 
-    markdown = output_text["text"].strip()
-    if markdown.startswith("```markdown"):
-        markdown = markdown[len("```markdown\n"):].rstrip("`").rstrip()
-    elif markdown.startswith("```"):
-        markdown = markdown[4:].rstrip("`").rstrip()
+    markdown = strip_markdown_wrapper(output_text["text"])
 
     return {
         "markdown": markdown,

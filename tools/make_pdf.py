@@ -151,6 +151,29 @@ def generate_pdf(logo_key: str | None = None) -> dict:
         if CONFIG["timeout_after_load"] > 0:
             page.wait_for_timeout(CONFIG["timeout_after_load"])
 
+        log("Адаптивное склеивание маленьких секций...", "step")
+        merged = page.evaluate("""
+            () => {
+                // A4 с нашими полями (~55mm): usable ≈ 242mm ≈ 915px при 96dpi.
+                // Порог "маленькой" секции: < 25% высоты страницы ≈ 228px (~60mm).
+                const SMALL_PX = 230;
+                const sections = Array.from(document.querySelectorAll('.page-start'));
+                let count = 0;
+                sections.forEach((section, idx) => {
+                    if (idx === 0) return;
+                    const h = section.getBoundingClientRect().height;
+                    if (h < SMALL_PX) {
+                        section.classList.remove('page-start');
+                        section.dataset.autoMerged = String(Math.round(h)) + 'px';
+                        count++;
+                    }
+                });
+                return count;
+            }
+        """)
+        if merged:
+            log(f"Склеено маленьких секций: {merged}", "info")
+
         file_name = generate_file_name(base_name, logo_key)
         out_path = out_dir / file_name
         log(f"Генерация PDF: {out_path}", "step")

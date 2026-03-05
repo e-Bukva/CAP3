@@ -1,6 +1,5 @@
 """Клиент для работы с OpenAI API."""
 
-import re
 import sys
 from pathlib import Path
 
@@ -9,6 +8,7 @@ from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.gpt_prompts import SYSTEM_PROMPT, get_initial_prompt, get_correction_prompt
+from tools.file_utils import strip_markdown_wrapper
 
 _client: OpenAI | None = None
 _api_key: str | None = None
@@ -81,17 +81,6 @@ def _extract_text_from_response(data: dict) -> tuple[str, dict]:
     return text, usage
 
 
-def _strip_markdown_wrapper(text: str) -> str:
-    if text.startswith("```html"):
-        text = re.sub(r"^```html\n", "", text)
-        text = re.sub(r"\n```$", "", text)
-    elif text.startswith("```markdown"):
-        text = re.sub(r"^```markdown\n", "", text)
-        text = re.sub(r"\n```$", "", text)
-    elif text.startswith("```"):
-        text = re.sub(r"^```\n", "", text)
-        text = re.sub(r"\n```$", "", text)
-    return text
 
 
 def generate_html_from_file(file_path: Path, model: str = "gpt-5") -> dict:
@@ -136,7 +125,7 @@ def _generate_from_pdf(file_path: Path, model: str) -> dict:
 
     html, usage = _extract_text_from_response(data)
     return {
-        "html": _strip_markdown_wrapper(html),
+        "html": strip_markdown_wrapper(html),
         "usage": usage,
         "model": data.get("model"),
         "file_id": file_id,
@@ -167,7 +156,7 @@ def _generate_from_text(text_content: str, model: str) -> dict:
 
     html, usage = _extract_text_from_response(data)
     return {
-        "html": _strip_markdown_wrapper(html),
+        "html": strip_markdown_wrapper(html),
         "usage": usage,
         "model": data.get("model"),
     }
@@ -199,7 +188,7 @@ def generate_html_from_text(extracted_text: str, model: str = "gpt-5") -> dict:
     data = response.json()
     html = data["choices"][0]["message"]["content"].strip()
     return {
-        "html": _strip_markdown_wrapper(html),
+        "html": strip_markdown_wrapper(html),
         "usage": data.get("usage"),
         "model": data.get("model"),
     }
@@ -231,7 +220,7 @@ def apply_corrections(current_html: str, user_correction: str, model: str = "gpt
     data = response.json()
     html = data["choices"][0]["message"]["content"].strip()
     return {
-        "html": _strip_markdown_wrapper(html),
+        "html": strip_markdown_wrapper(html),
         "usage": data.get("usage"),
         "model": data.get("model"),
     }

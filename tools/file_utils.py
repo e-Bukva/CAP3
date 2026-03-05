@@ -1,6 +1,7 @@
 """Утилиты для работы с файловой системой и версионированием."""
 
 import json
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -133,6 +134,16 @@ def create_full_html_document(body_content: str, template: dict) -> str:
         f"{body_content}\n\n"
         f"{template['body_end']}"
     )
+
+
+def strip_markdown_wrapper(text: str) -> str:
+    """Удалить markdown code fence обёртку (```markdown, ```html, ```) если GPT её добавил.
+
+    Поддерживает CRLF и любые пробельные символы после закрывающего fence.
+    """
+    text = re.sub(r"^```(?:markdown|html|)\r?\n", "", text)
+    text = re.sub(r"\n```\s*$", "", text)
+    return text.strip()
 
 
 def format_file_size(size_bytes: int) -> str:
