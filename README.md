@@ -17,6 +17,8 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+> Зависимости: `openai`, `python-dotenv`, `requests`, `playwright`, `beautifulsoup4`
+
 ### 2. Создать файл `.env`
 
 ```bash
@@ -52,6 +54,15 @@ python tools/make_pdf.py --logo=spa-bureau  # с логотипом spa-bureau
 python tools/make_pdf.py --test             # тестовый режим
 ```
 
+## Типографика PDF
+
+При генерации HTML и PDF автоматически применяются два типографических фикса:
+
+| Фикс | Где | Что делает |
+|---|---|---|
+| Предлоги | `generate_html.py` | Оборачивает предлог + следующее слово в `nowrap`-span, предотвращая висячие предлоги |
+| Числа с пробелами | `make_pdf.py` | Оборачивает `22 500`, `1 338 750` и т. п. в `nowrap`-span (вне ячеек таблицы) |
+
 ## Структура проекта
 
 ```
@@ -65,7 +76,7 @@ python tools/make_pdf.py --test             # тестовый режим
 │   ├── generate_html.py    # Markdown → HTML
 │   └── make_pdf.py         # HTML → PDF (Playwright)
 ├── src/
-│   ├── print.css           # стили для печати
+│   ├── print.css           # стили для печати (A4, типографика, nowrap)
 │   └── assets/logos/       # логотипы компаний
 ├── input/                  # входные документы (PDF, DOCX)
 ├── Redact/                 # proposal.md для редактирования
@@ -85,3 +96,7 @@ python tools/make_pdf.py --test             # тестовый режим
 ## Логотипы
 
 Положите файлы логотипов в `src/assets/logos/` и настройте `logo-config.json`.
+
+## Changelog
+
+См. [CHANGELOG.md](./CHANGELOG.md).

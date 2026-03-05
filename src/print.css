@@ -122,6 +122,17 @@ html {
     widows: 3;
   }
 
+  li {
+    text-wrap: pretty;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+
+  p {
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+
   /* === Оптимизация отступов для печати === */
 
   .page {
@@ -206,6 +217,7 @@ html {
   /* === Блоки с заметками === */
 
   .notes {
+    text-align: left;
     padding: 8pt;
     margin-top: 10pt;
     margin-bottom: 10pt;

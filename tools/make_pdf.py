@@ -174,6 +174,35 @@ def generate_pdf(logo_key: str | None = None) -> dict:
         if merged:
             log(f"Склеено маленьких секций: {merged}", "info")
 
+        log("Оборачивание чисел с пробелами в nowrap-span...", "step")
+        page.evaluate("""() => {
+            const walker = document.createTreeWalker(
+                document.body, NodeFilter.SHOW_TEXT
+            );
+            const nodes = [];
+            let node;
+            while (node = walker.nextNode()) {
+                if (node.parentElement.closest('td, th')) continue;
+                if (/\\d[ \\t]+\\d/.test(node.textContent)) nodes.push(node);
+            }
+            nodes.forEach(n => {
+                const parts = n.textContent.split(/(\\d+(?:[ \\t]+\\d+)+)/g);
+                if (parts.length < 2) return;
+                const frag = document.createDocumentFragment();
+                parts.forEach(part => {
+                    if (/^\\d+(?:[ \\t]+\\d+)+$/.test(part)) {
+                        const span = document.createElement('span');
+                        span.style.whiteSpace = 'nowrap';
+                        span.textContent = part;
+                        frag.appendChild(span);
+                    } else {
+                        frag.appendChild(document.createTextNode(part));
+                    }
+                });
+                n.parentNode.replaceChild(frag, n);
+            });
+        }""")
+
         file_name = generate_file_name(base_name, logo_key)
         out_path = out_dir / file_name
         log(f"Генерация PDF: {out_path}", "step")

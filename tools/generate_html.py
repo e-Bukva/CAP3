@@ -9,10 +9,12 @@
 """
 
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
 
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,6 +30,25 @@ from tools.file_utils import (
 from tools.gpt_client import generate_html_from_file, initialize_openai
 
 load_dotenv()
+
+_PREPOSITION_RE = re.compile(
+    r'\b(в|и|с|к|у|о|а|но|не|на|из|по|за|от|до|со|во|об|при|для)\s+(\S+)',
+    re.IGNORECASE,
+)
+
+
+def fix_prepositions(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    for text_node in soup.find_all(string=True):
+        if text_node.parent.name in ("style", "script"):
+            continue
+        new_html = _PREPOSITION_RE.sub(
+            r'<span style="white-space:nowrap">\1 \2</span>',
+            str(text_node),
+        )
+        if new_html != str(text_node):
+            text_node.replace_with(BeautifulSoup(new_html, "html.parser"))
+    return str(soup)
 
 
 def main() -> None:
@@ -98,6 +119,7 @@ def main() -> None:
         print(f"📁 Сессия: {base_name}_{session_timestamp}\n")
 
         full_html = create_full_html_document(result["html"], HTML_TEMPLATE)
+        full_html = fix_prepositions(full_html)
 
         # Копируем print.css в папку сессии (нужен для рендера)
         src_css = PATHS["src"] / "print.css"
