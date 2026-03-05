@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+generated/sessions/*/
+!generated/sessions/.gitkeep
+input/*.pdf
+input/*.docx
+input/*.doc
+input/source.json
+Redact/proposal.md
+Redact/proposal.backup.*.md

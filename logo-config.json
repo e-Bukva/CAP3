@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "logo": {
+    "path": "src/assets/logos/Blue_Rakun синий.png",
+    "position": "bottom-center",
+    "width": "35mm",
+    "height": "auto",
+    "opacity": 0.9,
+    "margin": {
+      "fromEdge": "5mm"
+    }
+  },
+  "alternatives": {
+    "blue-rakun": {
+      "path": "src/assets/logos/Blue_Rakun синий.png",
+      "width": "30mm"
+    },
+    "spa-bureau": {
+      "path": "src/assets/logos/Spabureau360.png",
+      "width": "20mm"
+    }
+  }
+}
+
+

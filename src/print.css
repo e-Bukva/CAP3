@@ -1,0 +1,276 @@
+/**
+ * Печатные стили для генерации PDF A4
+ * Соответствует ТЗ: постраничный контроль, поля 15 мм, разрывы разделов
+ */
+
+:root {
+  --page-margin: 15mm;
+  --page-margin-bottom: 20mm; /* больше места под футер */
+}
+
+/* === Базовые правила для печати === */
+
+@page {
+  size: A4;
+  margin: 12mm 15mm 35mm 15mm; /* top right bottom left */
+}
+
+@media print {
+  html, body {
+    height: auto;
+  }
+
+  body {
+    margin: 0;
+  }
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  /* Main wrapper: prevents margin-collapsing at page start */
+  .sheet {
+    padding-top: 0;  /* отступ контролируется только через @page margin */
+  }
+
+  /* Sections: internal rhythm + draw dividers as TOP border of the section itself */
+  .section,
+  section {
+    padding-top: 4mm;
+    padding-bottom: 3mm;
+    border-top: 6px solid #2b2b2b; /* former divider */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .section:first-of-type,
+  section:first-of-type {
+    border-top: 0;
+  }
+
+  section > :first-child {
+    margin-top: 0;
+  }
+
+  section > :last-child {
+    margin-bottom: 0;
+  }
+
+  /* Page starts: explicit page break */
+  .page-start {
+    break-before: page;
+  }
+
+  .page-start > :first-child {
+    margin-top: 0 !important;
+  }
+
+  /* Headings stay with first paragraph, but do NOT lock whole section */
+  h2 {
+    break-after: avoid;
+    margin: 0 0 6mm;
+  }
+
+  h2 + p {
+    break-before: avoid;
+  }
+
+  /* Flow rules to avoid giant gaps: Allow big containers to flow, protect only atomic units */
+  section {
+    break-inside: auto;
+  }
+
+  ul, ol {
+    break-inside: auto;
+  }
+
+  li {
+    break-inside: avoid; /* keep a single bullet intact */
+  }
+
+  .card,
+  figure,
+  .table-block,
+  table,
+  thead,
+  tbody,
+  tr {
+    break-inside: avoid;
+  }
+
+  /* Tables baseline */
+  .table-block table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  td, th {
+    padding: 3mm;
+  }
+
+  /* === Вдовы и сироты === */
+  
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* === Оптимизация отступов для печати === */
+
+  .page {
+    margin: 0;
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .section {
+    orphans: 2;
+    widows: 2;
+  }
+
+  /* Компактные отступы */
+  .section + .section {
+    margin-top: 18px;
+  }
+
+  /* === Таблицы === */
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    margin-bottom: 12px;
+  }
+
+  .table th,
+  .table td {
+    padding: 6pt 8pt;
+    vertical-align: top;
+  }
+
+  /* Фикс тонких границ для печати */
+  .table,
+  .table th,
+  .table td {
+    border-width: 0.75pt !important;
+  }
+
+  .table tbody tr + tr td {
+    border-top-width: 0.5pt !important;
+  }
+
+  /* === Изображения === */
+
+  img {
+    max-width: 100%;
+    height: auto;
+    break-inside: avoid;
+    page-break-inside: avoid; /* fallback */
+  }
+
+  /* === Элементы с декоративными линиями === */
+
+  /* Упрощаем lead-линии для печати */
+  .lead-row .lead {
+    background: none !important;
+    border-bottom: 0.75pt dotted rgba(0, 0, 0, 0.25) !important;
+    height: auto !important;
+    padding-bottom: 2px;
+    transform: none !important;
+  }
+
+  /* === Скрытие элементов === */
+
+  /* Скрываем веб-футер (используем PDF колонтитулы) */
+  .footer {
+    display: none;
+  }
+
+  /* Скрываем навигацию, если есть */
+  nav,
+  .navigation,
+  .no-print {
+    display: none;
+  }
+
+  /* Типографика намеренно не переопределяется здесь —
+     размеры h1/h2/h3 и отступы управляются inline-стилями документа */
+
+  /* === Блоки с заметками === */
+
+  .notes {
+    padding: 8pt;
+    margin-top: 10pt;
+    margin-bottom: 10pt;
+    break-inside: avoid;
+    page-break-inside: avoid; /* fallback */
+  }
+
+  /* === Totals (итоговые суммы) === */
+
+  .totals {
+    margin-top: 12pt;
+    padding: 10pt;
+    break-inside: avoid;
+    page-break-inside: avoid; /* fallback */
+  }
+}
+
+/* === Шрифты с кириллицей === */
+
+/* 
+  Раскомментируйте после установки локальных шрифтов в src/fonts/
+  Инструкции: src/fonts/README.md
+*/
+
+/*
+@font-face {
+  font-family: "Inter";
+  src: url("./fonts/Inter-Variable.woff2") format("woff2-variations"),
+       url("./fonts/Inter-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("./fonts/Montserrat-Variable.woff2") format("woff2-variations"),
+       url("./fonts/Montserrat-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+*/
+
+/* Шрифт управляется inline-стилями документа */
+
+/* === Make top bar invisible by recoloring to white === */
+@media print {
+  .section, section, .panel {
+    border-top-color: #fff !important;
+    -webkit-box-decoration-break: clone !important;
+    box-decoration-break: clone !important;
+  }
+  hr, .divider, .separator {
+    color: #fff !important;
+    background: #fff !important;
+    border-color: #fff !important;
+  }
+  .section::before, .section::after,
+  section::before, section::after,
+  .divider::before, .divider::after {
+    background: #fff !important;
+    border-color: #fff !important;
+  }
+  .page-start { break-before: page; }
+  .page-start::before { content:""; display:block; height:6mm; }
+  .page-start > :first-child { margin-top: 0 !important; }
+}
+
