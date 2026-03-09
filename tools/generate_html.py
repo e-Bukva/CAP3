@@ -32,7 +32,19 @@ from tools.gpt_client import generate_html_from_file, initialize_openai
 load_dotenv()
 
 _PREPOSITION_RE = re.compile(
-    r'\b(в|и|с|к|у|о|а|но|не|на|из|по|за|от|до|со|во|об|при|для)\s+(\S+)',
+    r'\b('
+    # Русские предлоги и союзы
+    r'в|и|с|к|у|о|а|но|не|на|из|по|за|от|до|со|во|об|при|для'
+    r'|'
+    # Английские артикли
+    r'a|an|the'
+    r'|'
+    # Английские предлоги (2–4 символа)
+    r'in|on|at|to|by|of|up|as|is|it|be|do|so|or|if'
+    r'|'
+    # Английские союзы и короткие служебные слова
+    r'and|but|nor|yet|for|via|per|than|from|with|into|also|over|when|upon'
+    r')\s+(\S+)',
     re.IGNORECASE,
 )
 
