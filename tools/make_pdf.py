@@ -54,7 +54,7 @@ def find_latest_session() -> tuple[Path, str]:
 
     sessions = sorted(
         (d for d in sessions_dir.iterdir() if d.is_dir()),
-        key=lambda d: d.name,
+        key=lambda d: d.stat().st_mtime,
         reverse=True,
     )
     if not sessions:

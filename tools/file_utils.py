@@ -64,15 +64,8 @@ def read_source_metadata() -> dict | None:
 
 def resolve_session_base_name() -> str:
     meta = read_source_metadata()
-    if meta and meta.get("baseName"):
-        return meta["baseName"]
-
-    input_dir = PATHS["input"]
-    if input_dir.exists():
-        for f in input_dir.iterdir():
-            if not f.name.startswith(".") and f.suffix.lower() == ".pdf":
-                return f.stem
-
+    if meta:
+        return meta.get("name") or meta.get("baseName") or "proposal"
     return "proposal"
 
 

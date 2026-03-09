@@ -219,8 +219,17 @@ def main() -> None:
         proposal_path.write_text(result["markdown"], encoding="utf-8")
         print(f"💾 Сохранено: {proposal_path}\n")
 
-        source_meta = {"sourceFile": source_file.name, "baseName": source_file.stem}
         source_meta_path = PATHS["input"] / "source.json"
+        existing_meta = {}
+        if source_meta_path.exists():
+            try:
+                existing_meta = json.loads(source_meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        source_meta = {
+            "sourceFile": source_file.name,
+            "name": existing_meta.get("name") or source_file.stem,
+        }
         source_meta_path.write_text(json.dumps(source_meta, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"💾 Метаданные источника: {source_meta_path}\n")
 
