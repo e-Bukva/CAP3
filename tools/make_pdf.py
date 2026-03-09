@@ -33,7 +33,6 @@ CONFIG = {
     },
     "print_background": True,
     "prefer_css_page_size": True,
-    "use_timestamp": False,
     "timeout_navigation": 30000,
     "timeout_after_load": 500,
 }
@@ -109,14 +108,8 @@ def load_logo_config(logo_key: str | None = None) -> dict:
         return {"enabled": False}
 
 
-def generate_file_name(base_name: str, logo_key: str | None = None) -> str:
-    if not CONFIG["use_timestamp"]:
-        return f"{base_name}.pdf"
-
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if logo_key:
-        return f"{base_name}_{logo_key}_{ts}.pdf"
-    return f"{base_name}_{ts}.pdf"
+def generate_file_name(base_name: str) -> str:
+    return f"{base_name}.pdf"
 
 
 def generate_pdf(logo_key: str | None = None) -> dict:
@@ -203,7 +196,7 @@ def generate_pdf(logo_key: str | None = None) -> dict:
             });
         }""")
 
-        file_name = generate_file_name(base_name, logo_key)
+        file_name = generate_file_name(base_name)
         out_path = out_dir / file_name
         log(f"Генерация PDF: {out_path}", "step")
 

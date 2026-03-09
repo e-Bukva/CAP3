@@ -7,7 +7,7 @@ import requests
 from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config.gpt_prompts import SYSTEM_PROMPT, get_initial_prompt, get_correction_prompt
+from config.gpt_prompts import EXTRACT_MARKDOWN_PROMPT, SYSTEM_PROMPT, get_extract_markdown_prompt
 from tools.file_utils import strip_markdown_wrapper
 
 _client: OpenAI | None = None
@@ -81,6 +81,78 @@ def _extract_text_from_response(data: dict) -> tuple[str, dict]:
     return text, usage
 
 
+
+
+def extract_markdown_from_pdf(file_path: Path, model: str) -> dict:
+    if _client is None:
+        raise RuntimeError("OpenAI клиент не инициализирован. Вызовите initialize_openai() сначала.")
+
+    file_id = _upload_file(file_path)
+    print(f"  🧠 Извлечение Markdown через {model}...")
+
+    data = _call_responses_api({
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": EXTRACT_MARKDOWN_PROMPT}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": get_extract_markdown_prompt()},
+                    {"type": "input_file", "file_id": file_id},
+                ],
+            },
+        ],
+        "max_output_tokens": 16000,
+    })
+
+    markdown, usage = _extract_text_from_response(data)
+    return {
+        "markdown": strip_markdown_wrapper(markdown),
+        "usage": usage,
+        "model": data.get("model"),
+        "file_id": file_id,
+    }
+
+
+def extract_markdown_from_text(file_path: Path, model: str) -> dict:
+    if _client is None:
+        raise RuntimeError("OpenAI клиент не инициализирован. Вызовите initialize_openai() сначала.")
+
+    content = file_path.read_text(encoding="utf-8")
+    print(f"  📄 Чтение файла: {file_path.name}...")
+    print(f"  🧠 Извлечение Markdown через {model}...")
+
+    data = _call_responses_api({
+        "model": model,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            EXTRACT_MARKDOWN_PROMPT
+                            + "\n\n"
+                            + get_extract_markdown_prompt()
+                            + "\n\n"
+                            + content
+                        ),
+                    }
+                ],
+            }
+        ],
+        "max_output_tokens": 16000,
+    })
+
+    markdown, usage = _extract_text_from_response(data)
+    return {
+        "markdown": strip_markdown_wrapper(markdown),
+        "usage": usage,
+        "model": data.get("model"),
+    }
 
 
 def generate_html_from_file(file_path: Path, model: str = "gpt-5") -> dict:
@@ -162,120 +234,3 @@ def _generate_from_text(text_content: str, model: str) -> dict:
     }
 
 
-def generate_html_from_text(extracted_text: str, model: str = "gpt-5") -> dict:
-    if _client is None:
-        raise RuntimeError("OpenAI клиент не инициализирован. Вызовите initialize_openai() сначала.")
-
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {_api_key}",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": get_initial_prompt(extracted_text)},
-            ],
-            "max_completion_tokens": 4000,
-        },
-        timeout=120,
-    )
-    if not response.ok:
-        raise RuntimeError(f"API error {response.status_code}: {response.text}")
-
-    data = response.json()
-    html = data["choices"][0]["message"]["content"].strip()
-    return {
-        "html": strip_markdown_wrapper(html),
-        "usage": data.get("usage"),
-        "model": data.get("model"),
-    }
-
-
-def apply_corrections(current_html: str, user_correction: str, model: str = "gpt-5") -> dict:
-    if _client is None:
-        raise RuntimeError("OpenAI клиент не инициализирован. Вызовите initialize_openai() сначала.")
-
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {_api_key}",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": get_correction_prompt(current_html, user_correction)},
-            ],
-            "max_completion_tokens": 4000,
-        },
-        timeout=120,
-    )
-    if not response.ok:
-        raise RuntimeError(f"API error {response.status_code}: {response.text}")
-
-    data = response.json()
-    html = data["choices"][0]["message"]["content"].strip()
-    return {
-        "html": strip_markdown_wrapper(html),
-        "usage": data.get("usage"),
-        "model": data.get("model"),
-    }
-
-
-def analyze_html_structure(html: str) -> dict:
-    import re as _re
-
-    sections = []
-    for m in _re.finditer(r'<section[^>]*id="([^"]*)"[^>]*>[\s\S]*?<h2[^>]*>(.*?)</h2>', html):
-        title = _re.sub(r"<[^>]*>", "", m.group(2)).strip()
-        sections.append({"id": m.group(1), "title": title})
-
-    if not sections:
-        for m in _re.finditer(r"<h2[^>]*>(.*?)</h2>", html):
-            title = _re.sub(r"<[^>]*>", "", m.group(1)).strip()
-            sections.append({"title": title})
-
-    return {
-        "sections": sections,
-        "table_count": len(_re.findall(r"<table", html)),
-        "list_count": len(_re.findall(r"<ul", html)),
-        "character_count": len(html),
-        "has_content": bool(sections) or "<p" in html,
-    }
-
-
-def validate_html(html: str) -> dict:
-    import re as _re
-
-    errors, warnings = [], []
-
-    if not html or not html.strip():
-        errors.append("HTML пустой")
-        return {"valid": False, "errors": errors, "warnings": warnings}
-
-    open_tags = len(_re.findall(r"<section", html))
-    close_tags = len(_re.findall(r"</section>", html))
-    if open_tags != close_tags:
-        warnings.append(f"Несоответствие тегов <section>: открыто {open_tags}, закрыто {close_tags}")
-
-    if not ("<h2" in html or "<h3" in html):
-        warnings.append("HTML не содержит заголовков")
-
-    if "```html" in html or "```" in html:
-        errors.append("HTML содержит markdown обёртки — требуется очистка")
-
-    return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
-
-
-def format_token_usage(usage: dict | None) -> str:
-    if not usage:
-        return "N/A"
-    return (
-        f"Промпт: {usage.get('prompt_tokens', 0)}, "
-        f"Ответ: {usage.get('completion_tokens', 0)}, "
-        f"Всего: {usage.get('total_tokens', 0)}"
-    )

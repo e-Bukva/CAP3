@@ -2,7 +2,6 @@
 
 import json
 import re
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -23,28 +22,6 @@ def ensure_dir(path: Path) -> bool:
         return True
     return False
 
-
-def initialize_directories() -> list[str]:
-    created = []
-    for name, path in PATHS.items():
-        if ensure_dir(path):
-            created.append(name)
-    return created
-
-
-def scan_input_folder() -> list[dict]:
-    input_dir = PATHS["input"]
-    if not input_dir.exists():
-        return []
-
-    supported = {".docx", ".pdf", ".md", ".markdown"}
-    files = []
-    for f in input_dir.iterdir():
-        if f.name.startswith("."):
-            continue
-        if f.suffix.lower() in supported:
-            files.append({"name": f.name, "path": f, "stats": f.stat()})
-    return files
 
 
 def create_session_timestamp() -> str:
@@ -76,47 +53,6 @@ def create_session_directory(timestamp: str, base_name: str) -> Path:
     return session_path
 
 
-def copy_source_to_session(source_path: Path, session_path: Path) -> Path:
-    dest = session_path / f"source_{source_path.name}"
-    shutil.copy2(source_path, dest)
-    return dest
-
-
-def save_html_version(session_path: Path, version: str | int, content: str) -> Path:
-    file_name = "proposal_final.html" if version == "final" else f"proposal_v{version}.html"
-    file_path = session_path / file_name
-    file_path.write_text(content, encoding="utf-8")
-    return file_path
-
-
-def read_html_version(session_path: Path, version: str | int) -> str | None:
-    file_name = "proposal_final.html" if version == "final" else f"proposal_v{version}.html"
-    file_path = session_path / file_name
-    if not file_path.exists():
-        return None
-    return file_path.read_text(encoding="utf-8")
-
-
-def get_session_versions(session_path: Path) -> list[str]:
-    if not session_path.exists():
-        return []
-    files = sorted(
-        f.name for f in session_path.iterdir()
-        if f.name.startswith("proposal_v") or f.name == "proposal_final.html"
-    )
-    return files
-
-
-def get_next_version_number(session_path: Path) -> int:
-    import re
-    versions = get_session_versions(session_path)
-    numbers = []
-    for v in versions:
-        m = re.match(r"proposal_v(\d+)\.html", v)
-        if m:
-            numbers.append(int(m.group(1)))
-    return max(numbers) + 1 if numbers else 1
-
 
 def create_full_html_document(body_content: str, template: dict) -> str:
     return (
@@ -147,14 +83,3 @@ def format_file_size(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
-def get_session_info(session_path: Path) -> dict | None:
-    if not session_path.exists():
-        return None
-    versions = get_session_versions(session_path)
-    source_files = [f.name for f in session_path.iterdir() if f.name.startswith("source_")]
-    return {
-        "timestamp": session_path.name,
-        "path": session_path,
-        "versions": len(versions),
-        "source_file": source_files[0] if source_files else None,
-    }

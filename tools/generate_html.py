@@ -64,8 +64,6 @@ def fix_prepositions(html: str) -> str:
 
 
 def main() -> None:
-    import time
-
     print("\n🤖 Генерация HTML из документа\n")
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -106,8 +104,6 @@ def main() -> None:
         file_info = pdf_files[0]
         print(f"⚠️  Аварийный режим: генерация напрямую из PDF ({file_info['name']})")
         print("   Рекомендуется использовать: python tools/extract_markdown.py → редактировать → python tools/generate_html.py\n")
-        print("❓ Продолжить? (Ctrl+C для отмены)\n")
-        time.sleep(3)
 
     size_kb = file_info["stats"].st_size // 1024
     print(f"✓ Обрабатываем: {file_info['name']} ({size_kb} KB)\n")

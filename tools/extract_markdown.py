@@ -12,152 +12,14 @@ import json
 import sys
 from pathlib import Path
 
-import requests
 from dotenv import load_dotenv
-from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.gpt_prompts import EXTRACT_MARKDOWN_PROMPT, get_extract_markdown_prompt
-from tools.file_utils import PATHS, ensure_dir, strip_markdown_wrapper
+from tools.file_utils import PATHS, ensure_dir
+from tools.gpt_client import extract_markdown_from_pdf, extract_markdown_from_text, initialize_openai
 
 load_dotenv()
-
-
-def extract_markdown_from_pdf(pdf_path: Path, api_key: str, model: str) -> dict:
-    print("  📤 Загрузка PDF в OpenAI...")
-
-    client = OpenAI(api_key=api_key)
-    with open(pdf_path, "rb") as f:
-        file_obj = client.files.create(file=f, purpose="user_data")
-
-    print(f"  ✓ Файл загружен: {file_obj.id}")
-    print(f"  🧠 Извлечение Markdown через {model}...")
-
-    response = requests.post(
-        "https://api.openai.com/v1/responses",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        json={
-            "model": model,
-            "input": [
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": EXTRACT_MARKDOWN_PROMPT}],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": get_extract_markdown_prompt()},
-                        {"type": "input_file", "file_id": file_obj.id},
-                    ],
-                },
-            ],
-            "max_output_tokens": 16000,
-        },
-        timeout=120,
-    )
-
-    if not response.ok:
-        raise RuntimeError(f"API error {response.status_code}: {response.text}")
-
-    data = response.json()
-
-    if data.get("status") == "incomplete":
-        reason = data.get("incomplete_details", {}).get("reason", "unknown")
-        raise RuntimeError(f"Ответ неполный: {reason}")
-
-    message_output = next((item for item in data["output"] if item["type"] == "message"), None)
-    if not message_output or not message_output.get("content"):
-        raise RuntimeError("Не найден message в output")
-
-    text_content = next(
-        (item for item in message_output["content"] if item["type"] == "output_text"), None
-    )
-    if not text_content:
-        raise RuntimeError("Не найден output_text в content")
-
-    markdown = strip_markdown_wrapper(text_content["text"])
-
-    return {
-        "markdown": markdown,
-        "usage": {
-            "prompt_tokens": data.get("usage", {}).get("input_tokens", 0),
-            "completion_tokens": data.get("usage", {}).get("output_tokens", 0),
-            "total_tokens": data.get("usage", {}).get("total_tokens", 0),
-        },
-        "model": data.get("model"),
-        "file_id": file_obj.id,
-    }
-
-
-def extract_markdown_from_text(file_path: Path, api_key: str, model: str) -> dict:
-    content = file_path.read_text(encoding="utf-8")
-    print(f"  📄 Чтение файла: {file_path.name}...")
-    print(f"  🧠 Извлечение Markdown через {model}...")
-
-    response = requests.post(
-        "https://api.openai.com/v1/responses",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        json={
-            "model": model,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": (
-                                EXTRACT_MARKDOWN_PROMPT
-                                + "\n\n"
-                                + get_extract_markdown_prompt()
-                                + "\n\n"
-                                + content
-                            ),
-                        }
-                    ],
-                }
-            ],
-            "max_output_tokens": 16000,
-        },
-        timeout=120,
-    )
-
-    if not response.ok:
-        raise RuntimeError(f"API error {response.status_code}: {response.text}")
-
-    data = response.json()
-
-    if data.get("status") == "incomplete":
-        reason = data.get("incomplete_details", {}).get("reason", "unknown")
-        raise RuntimeError(f"Ответ неполный: {reason}")
-
-    message_output = next((item for item in data["output"] if item["type"] == "message"), None)
-    if not message_output or not message_output.get("content"):
-        raise RuntimeError("Не найден message в output")
-
-    output_text = next(
-        (item for item in message_output["content"] if item["type"] == "output_text"), None
-    )
-    if not output_text:
-        raise RuntimeError("Не найден output_text")
-
-    markdown = strip_markdown_wrapper(output_text["text"])
-
-    return {
-        "markdown": markdown,
-        "usage": {
-            "prompt_tokens": data.get("usage", {}).get("input_tokens", 0),
-            "completion_tokens": data.get("usage", {}).get("output_tokens", 0),
-            "total_tokens": data.get("usage", {}).get("total_tokens", 0),
-        },
-        "model": data.get("model"),
-    }
 
 
 def main() -> None:
@@ -174,6 +36,7 @@ def main() -> None:
         sys.exit(1)
 
     model = os.environ.get("OPENAI_MODEL", "gpt-5")
+    initialize_openai(api_key, model)
     print(f"✓ API готов ({model})\n")
 
     print("📁 Поиск документа в input/...")
@@ -204,9 +67,9 @@ def main() -> None:
 
     try:
         if source_file.suffix.lower() == ".pdf":
-            result = extract_markdown_from_pdf(source_file, api_key, model)
+            result = extract_markdown_from_pdf(source_file, model)
         else:
-            result = extract_markdown_from_text(source_file, api_key, model)
+            result = extract_markdown_from_text(source_file, model)
 
         size_kb = len(result["markdown"]) / 1024
         usage = result["usage"]

@@ -86,24 +86,6 @@ DELIVERABLE (итоги раздела — ОБЯЗАТЕЛЬНО оборачи
 Начинай сразу с первого <section>."""
 
 
-def get_initial_prompt(extracted_text: str) -> str:
-    return f"""Исходный текст коммерческого предложения:
-
-{extracted_text}
-
-Пожалуйста, структурируй этот текст в HTML согласно шаблону. Сохраняй весь текст без изменений, только добавь правильную разметку."""
-
-
-def get_correction_prompt(current_html: str, user_correction: str) -> str:
-    return f"""У меня есть HTML коммерческого предложения. Нужно внести следующие корректировки:
-
-{user_correction}
-
-Текущий HTML:
-{current_html}
-
-Пожалуйста, внеси указанные изменения, сохраняя структуру и стиль оформления. Верни полный исправленный HTML (только содержимое body, без тега)."""
-
 
 HTML_TEMPLATE = {
     "doctype": "<!doctype html>",
