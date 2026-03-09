@@ -33,7 +33,7 @@ CONFIG = {
     },
     "print_background": True,
     "prefer_css_page_size": True,
-    "timeout_navigation": 30000,
+    "timeout_navigation": 60000,
     "timeout_after_load": 500,
 }
 
@@ -136,7 +136,7 @@ def generate_pdf(logo_key: str | None = None) -> dict:
 
         html_url = "file:///" + str(html_file).replace("\\", "/")
         log(f"Загрузка страницы: {html_url}", "step")
-        page.goto(html_url, wait_until="load", timeout=CONFIG["timeout_navigation"])
+        page.goto(html_url, wait_until="networkidle", timeout=CONFIG["timeout_navigation"])
 
         log("Применение печатных стилей...", "step")
         page.emulate_media(media="print")

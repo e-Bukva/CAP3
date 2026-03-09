@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="./easymde.min.css" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+
+    .EasyMDEContainer { display: flex; flex-direction: column; height: 100vh; }
+    .editor-toolbar {
+      flex-shrink: 0;
+      background: #1e1e2e !important;
+      border-color: #3a3a5c !important;
+      border-radius: 6px 6px 0 0;
+      opacity: 1 !important;
+    }
+    .editor-toolbar button { color: #cdd6f4 !important; }
+    .editor-toolbar button:hover, .editor-toolbar button.active {
+      background: #313244 !important;
+      border-color: #585b70 !important;
+    }
+    .editor-toolbar i.separator { border-color: #3a3a5c !important; }
+    .CodeMirror {
+      flex: 1;
+      background: #1e1e2e !important;
+      color: #cdd6f4 !important;
+      border-color: #3a3a5c !important;
+      border-radius: 0 0 6px 6px;
+      font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+      font-size: 13.5px;
+      line-height: 1.65;
+      height: 100% !important;
+    }
+    .CodeMirror-scroll { min-height: 200px; }
+    .CodeMirror-cursor { border-left-color: #cba6f7 !important; }
+    .cm-s-easymde .cm-header { color: #89b4fa !important; font-weight: 700; }
+    .cm-s-easymde .cm-strong { color: #f38ba8 !important; }
+    .cm-s-easymde .cm-em { color: #a6e3a1 !important; }
+    .cm-s-easymde .cm-link, .cm-s-easymde .cm-url { color: #89dceb !important; }
+    .cm-s-easymde .cm-quote { color: #a6adc8 !important; font-style: italic; }
+    .cm-s-easymde .cm-meta { color: #89b4fa !important; }   /* table pipes */
+    .CodeMirror-selected { background: #45475a !important; }
+
+    /* Side-by-side & preview pane */
+    .editor-preview-side, .editor-preview {
+      background: #181825 !important;
+      color: #cdd6f4 !important;
+      font-family: "Inter", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      border-color: #3a3a5c !important;
+    }
+    .editor-preview-side table, .editor-preview table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0;
+    }
+    .editor-preview-side th, .editor-preview th,
+    .editor-preview-side td, .editor-preview td {
+      border: 1px solid #45475a;
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .editor-preview-side th, .editor-preview th {
+      background: #313244;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #a6adc8;
+    }
+    .editor-preview-side h2, .editor-preview h2,
+    .editor-preview-side h3, .editor-preview h3 { color: #89b4fa; }
+    .editor-preview-side blockquote, .editor-preview blockquote {
+      border-left: 3px solid #585b70;
+      padding-left: 12px;
+      color: #a6adc8;
+      margin: 8px 0;
+      font-style: italic;
+    }
+    .editor-preview-active-side { background: #181825 !important; }
+  </style>
+</head>
+<body>
+  <textarea id="editor"></textarea>
+
+  <script src="./easymde.min.js"></script>
+  <script>
+    // ── Minimal Streamlit component protocol via postMessage ──────────────────
+    const StreamlitLib = {
+      _ready: false,
+      _renderCallbacks: [],
+
+      setComponentReady() {
+        window.parent.postMessage({ type: "streamlit:componentReady", apiVersion: 1 }, "*");
+        this._ready = true;
+      },
+
+      setComponentValue(value) {
+        window.parent.postMessage({ type: "streamlit:setComponentValue", value }, "*");
+      },
+
+      setFrameHeight(height) {
+        window.parent.postMessage({ type: "streamlit:setFrameHeight", height }, "*");
+      },
+
+      onRender(callback) {
+        this._renderCallbacks.push(callback);
+      },
+    };
+
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "streamlit:render") {
+        StreamlitLib._renderCallbacks.forEach(cb => cb(event.data.args || {}));
+      }
+    });
+
+    // ── Editor setup ──────────────────────────────────────────────────────────
+    let editor = null;
+    let lastSent = null;
+    let initialized = false;
+    let listenersAttached = false;
+
+    function attachChangeListener() {
+      if (listenersAttached) return;
+      listenersAttached = true;
+      editor.codemirror.on("change", () => {
+        const val = editor.value();
+        if (val !== lastSent) {
+          lastSent = val;
+          StreamlitLib.setComponentValue(val);
+        }
+      });
+    }
+
+    function initEditor(initialValue, height) {
+      const containerHeight = height || 560;
+      const editorHeight = containerHeight - 52;
+
+      // Set lastSent BEFORE init so init-triggered change events are ignored
+      lastSent = initialValue || "";
+
+      editor = new EasyMDE({
+        element: document.getElementById("editor"),
+        initialValue: initialValue || "",
+        autofocus: false,
+        spellChecker: false,
+        autosave: { enabled: false },
+        toolbar: [
+          "bold", "italic", "strikethrough", "|",
+          "heading-2", "heading-3", "|",
+          "unordered-list", "ordered-list", "|",
+          "table", "horizontal-rule", "|",
+          "link", "|",
+          "preview", "side-by-side", "|",
+          "guide",
+        ],
+        renderingConfig: { singleLineBreaks: false },
+        minHeight: editorHeight + "px",
+        maxHeight: editorHeight + "px",
+      });
+
+      // Attach change listener only after init settles — prevents init-loop
+      setTimeout(attachChangeListener, 300);
+
+      StreamlitLib.setFrameHeight(containerHeight);
+      // Do NOT call setComponentValue here: Python already has `default=value`
+    }
+
+    StreamlitLib.onRender((args) => {
+      const { value, height } = args;
+
+      if (!initialized) {
+        initialized = true;
+        initEditor(value, height);
+      } else if (editor && value !== lastSent) {
+        // External update (e.g. after PDF import) — update editor silently
+        lastSent = value || "";
+        editor.value(lastSent);
+      }
+    });
+
+    StreamlitLib.setComponentReady();
+  </script>
+</body>
+</html>

@@ -1,11 +1,13 @@
 # HTML-to-PDF Generator (Python)
 
-Генератор PDF коммерческих предложений из HTML с использованием GPT и Playwright.
+Генератор PDF коммерческих предложений из Markdown с использованием GPT и Playwright.
 
 ## Пайплайн
 
 ```
-PDF/DOCX → [extract] → Redact/proposal.md → [редактировать] → [generate] → HTML → [pdf] → PDF
+Markdown → [GPT] → HTML → [Playwright] → PDF
+               ↑
+    (опционально) PDF/DOCX → [GPT] → Markdown
 ```
 
 ## Быстрый старт
@@ -17,7 +19,7 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-> Зависимости: `openai`, `python-dotenv`, `requests`, `playwright`, `beautifulsoup4`
+> Зависимости: `openai`, `python-dotenv`, `requests`, `playwright`, `beautifulsoup4`, `streamlit`, `markdown`
 
 ### 2. Создать файл `.env`
 
@@ -26,17 +28,23 @@ cp .env.example .env
 # Вставьте ваш OPENAI_API_KEY в .env
 ```
 
-### 3. Положить документ в `input/`
-
-Поддерживаются `.pdf`, `.docx`, `.doc`.
-
-### 4. Запустить пайплайн
+### 3а. Запустить веб-приложение (рекомендуется)
 
 ```bash
-# Шаг 1: извлечь Markdown из PDF/DOCX
+streamlit run app.py
+```
+
+Откроется браузер с двухшаговым интерфейсом:
+1. **Редактор MD** — вводите или вставляете Markdown; при желании импортируйте PDF/DOCX для извлечения через GPT.
+2. **HTML и PDF** — предпросмотр сгенерированного HTML, скачивание PDF.
+
+### 3б. CLI-пайплайн
+
+```bash
+# Шаг 1 (опционально): извлечь Markdown из PDF/DOCX
 python tools/extract_markdown.py
 
-# Шаг 2: отредактировать Redact/proposal.md в Obsidian (опционально)
+# Шаг 2: отредактировать Redact/proposal.md (например в Obsidian)
 
 # Шаг 3: сгенерировать HTML через GPT
 python tools/generate_html.py
@@ -67,13 +75,14 @@ python tools/make_pdf.py --test             # тестовый режим
 
 ```
 9_CP_Python/
+├── app.py                  # Streamlit веб-приложение
 ├── config/
-│   └── gpt_prompts.py      # системные промпты и HTML-шаблон
+│   └── gpt_prompts.py      # системные промпты и HTML-шаблон (включает Google Fonts)
 ├── tools/
 │   ├── file_utils.py       # утилиты файловой системы
 │   ├── gpt_client.py       # клиент OpenAI API
 │   ├── extract_markdown.py # PDF/DOCX → Markdown
-│   ├── generate_html.py    # Markdown → HTML
+│   ├── generate_html.py    # Markdown → HTML (CLI)
 │   └── make_pdf.py         # HTML → PDF (Playwright)
 ├── src/
 │   ├── print.css           # стили для печати (A4, типографика, nowrap)
@@ -91,7 +100,7 @@ python tools/make_pdf.py --test             # тестовый режим
 | Переменная | Описание | По умолчанию |
 |---|---|---|
 | `OPENAI_API_KEY` | Ключ API OpenAI | — |
-| `OPENAI_MODEL` | Модель GPT | `gpt-5` |
+| `OPENAI_MODEL` | Модель GPT | `gpt-4.1` |
 
 ## Логотипы
 

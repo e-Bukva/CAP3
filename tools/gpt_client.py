@@ -14,7 +14,7 @@ _client: OpenAI | None = None
 _api_key: str | None = None
 
 
-def initialize_openai(api_key: str, model: str = "gpt-5") -> dict:
+def initialize_openai(api_key: str, model: str = "gpt-4.1") -> dict:
     global _client, _api_key
     if not api_key:
         raise ValueError("OpenAI API ключ не предоставлен")
@@ -155,7 +155,7 @@ def extract_markdown_from_text(file_path: Path, model: str) -> dict:
     }
 
 
-def generate_html_from_file(file_path: Path, model: str = "gpt-5") -> dict:
+def generate_html_from_file(file_path: Path, model: str = "gpt-4.1") -> dict:
     if _client is None:
         raise RuntimeError("OpenAI клиент не инициализирован. Вызовите initialize_openai() сначала.")
 

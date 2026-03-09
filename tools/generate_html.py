@@ -71,10 +71,10 @@ def main() -> None:
         print("✗ Ошибка: OPENAI_API_KEY не найден")
         print("\n📝 Создайте файл .env:")
         print("OPENAI_API_KEY=sk-ваш-ключ")
-        print("OPENAI_MODEL=gpt-4o\n")
+        print("OPENAI_MODEL=gpt-4.1\n")
         sys.exit(1)
 
-    model = os.environ.get("OPENAI_MODEL", "gpt-5")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4.1")
     initialize_openai(api_key, model)
     print(f"✓ API готов ({model})\n")
 

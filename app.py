@@ -2,7 +2,8 @@
 """
 Streamlit-приложение для генерации PDF коммерческих предложений.
 
-Flow: Загрузить файл → Извлечь MD → Редактировать → Сгенерировать HTML → Скачать PDF
+Flow: Редактировать MD → Сгенерировать HTML → Скачать PDF
+      (опционально: импорт из PDF/DOCX для извлечения MD)
 """
 
 import json
@@ -16,7 +17,6 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import markdown as md_lib
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -54,7 +54,7 @@ st.set_page_config(
 _DEFAULTS: dict = {
     "step": 1,
     "api_key": os.environ.get("OPENAI_API_KEY", ""),
-    "model": os.environ.get("OPENAI_MODEL", "gpt-5"),
+    "model": os.environ.get("OPENAI_MODEL", "gpt-4.1"),
     "logo_key": None,
     "proposal_name": "",
     "markdown_text": "",
@@ -74,15 +74,12 @@ def _init_api() -> None:
     initialize_openai(st.session_state.api_key, st.session_state.model)
 
 
-def _save_source_meta(name: str, source_file_name: str) -> None:
+def _save_source_meta(name: str, source_file_name: str = "manual") -> None:
     ensure_dir(PATHS["input"])
     meta = {"sourceFile": source_file_name, "name": name}
     meta_path = PATHS["input"] / "source.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
-
-def _md_to_html(text: str) -> str:
-    return md_lib.markdown(text, extensions=["tables", "fenced_code"])
 
 
 def _reset() -> None:
@@ -104,7 +101,13 @@ with st.sidebar:
     if api_key_val:
         st.session_state.api_key = api_key_val
 
-    model_options = ["gpt-5", "gpt-4o", "gpt-4o-mini"]
+    model_options = [
+        "gpt-4.1",       # smartest non-reasoning, default
+        "gpt-4.1-mini",  # smaller, faster
+        "gpt-4.1-nano",  # fastest, cheapest
+        "gpt-5-mini",    # faster GPT-5
+        "gpt-5.4",       # most capable
+    ]
     default_model = (
         st.session_state.model if st.session_state.model in model_options else model_options[0]
     )
@@ -130,8 +133,8 @@ with st.sidebar:
 
 st.title("📄 Генератор коммерческих предложений")
 
-_STEP_LABELS = ["1. Загрузка и извлечение", "2. Редактирование MD", "3. HTML и PDF"]
-_step_cols = st.columns(3)
+_STEP_LABELS = ["1. Редактор MD", "2. HTML и PDF"]
+_step_cols = st.columns(2)
 for _i, (_col, _label) in enumerate(zip(_step_cols, _STEP_LABELS), 1):
     with _col:
         if _i < st.session_state.step:
@@ -143,19 +146,12 @@ for _i, (_col, _label) in enumerate(zip(_step_cols, _STEP_LABELS), 1):
 
 st.divider()
 
-# ─── STEP 1: Upload + name + extract ──────────────────────────────────────────
+# ─── STEP 1: MD Editor (primary) + optional file import ───────────────────────
 
 if st.session_state.step == 1:
-    st.subheader("Загрузите исходный документ")
 
-    col_file, col_name = st.columns([3, 2])
-
-    with col_file:
-        uploaded = st.file_uploader(
-            "PDF или Word файл",
-            type=["pdf", "docx", "doc"],
-            help="Исходное коммерческое предложение",
-        )
+    # Top bar: name + import
+    col_name, col_import = st.columns([2, 3])
 
     with col_name:
         name_val = st.text_input(
@@ -166,136 +162,132 @@ if st.session_state.step == 1:
         )
         st.session_state.proposal_name = name_val.strip()
 
+    with col_import:
+        with st.expander("📁 Импортировать из PDF / DOCX", expanded=False):
+            uploaded = st.file_uploader(
+                "Загрузите файл — Markdown будет извлечён через GPT",
+                type=["pdf", "docx", "doc"],
+                label_visibility="collapsed",
+            )
+            if uploaded:
+                btn_label = f"Извлечь MD из «{uploaded.name}»"
+                if not st.session_state.api_key:
+                    st.warning("Введите OpenAI API Key в боковой панели")
+                elif st.button(btn_label, type="primary", use_container_width=True):
+                    with st.spinner("Извлекаем структуру через GPT…"):
+                        try:
+                            _init_api()
+                            ensure_dir(PATHS["input"])
+                            input_path = PATHS["input"] / uploaded.name
+                            input_path.write_bytes(uploaded.getvalue())
+
+                            suffix = Path(uploaded.name).suffix.lower()
+                            if suffix == ".pdf":
+                                result = extract_markdown_from_pdf(
+                                    input_path, st.session_state.model
+                                )
+                            else:
+                                result = extract_markdown_from_text(
+                                    input_path, st.session_state.model
+                                )
+
+                            st.session_state.markdown_text = result["markdown"]
+                            if not st.session_state.proposal_name:
+                                st.session_state.proposal_name = Path(uploaded.name).stem
+
+                            usage = result["usage"]
+                            st.success(
+                                f"✓ {len(result['markdown']) / 1024:.1f} KB, "
+                                f"{usage['total_tokens']} токенов"
+                            )
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Ошибка: {exc}")
+
+    md_text = st.text_area(
+        label="md_editor",
+        value=st.session_state.markdown_text,
+        height=560,
+        label_visibility="collapsed",
+        placeholder="Введите или вставьте Markdown текст…\n\nИли импортируйте из PDF/DOCX через панель выше.",
+    )
+    st.session_state.markdown_text = md_text
+
+    st.divider()
+
+    # Generate HTML button
+    can_generate = bool(st.session_state.markdown_text.strip() and st.session_state.proposal_name)
     if not st.session_state.api_key:
         st.warning("Введите OpenAI API Key в боковой панели")
-    elif not uploaded:
-        st.info("Загрузите PDF или Word файл")
     elif not st.session_state.proposal_name:
         st.warning("Введите название проекта")
+    elif not st.session_state.markdown_text.strip():
+        st.info("Введите текст в редакторе или импортируйте файл")
     else:
-        if st.button("🚀 Извлечь Markdown", type="primary", use_container_width=True):
-            with st.spinner("Загружаем файл и извлекаем структуру через GPT…"):
+        if st.button(
+            "🤖 Сгенерировать HTML через GPT",
+            type="primary",
+            use_container_width=True,
+            disabled=not can_generate,
+        ):
+            with st.spinner("Генерируем HTML через GPT…"):
                 try:
                     _init_api()
-                    ensure_dir(PATHS["input"])
-                    input_path = PATHS["input"] / uploaded.name
-                    input_path.write_bytes(uploaded.getvalue())
+                    _save_source_meta(st.session_state.proposal_name)
 
-                    suffix = Path(uploaded.name).suffix.lower()
-                    if suffix == ".pdf":
-                        result = extract_markdown_from_pdf(input_path, st.session_state.model)
-                    else:
-                        result = extract_markdown_from_text(input_path, st.session_state.model)
+                    ensure_dir(PATHS["redact"])
+                    proposal_md_path = PATHS["redact"] / "proposal.md"
+                    proposal_md_path.write_text(
+                        st.session_state.markdown_text, encoding="utf-8"
+                    )
 
-                    st.session_state.markdown_text = result["markdown"]
-                    _save_source_meta(st.session_state.proposal_name, uploaded.name)
+                    result = generate_html_from_file(proposal_md_path, st.session_state.model)
+
+                    full_html = create_full_html_document(result["html"], HTML_TEMPLATE)
+                    full_html = fix_prepositions(full_html)
+
+                    timestamp = create_session_timestamp()
+                    session_path = create_session_directory(
+                        timestamp, st.session_state.proposal_name
+                    )
+
+                    src_css = PATHS["src"] / "print.css"
+                    if src_css.exists():
+                        shutil.copy2(src_css, session_path / "print.css")
+                    shutil.copy2(
+                        proposal_md_path,
+                        session_path / f"{st.session_state.proposal_name}.md",
+                    )
+
+                    html_path = session_path / f"{st.session_state.proposal_name}.html"
+                    html_path.write_text(full_html, encoding="utf-8")
+
+                    st.session_state.html_content = full_html
+                    st.session_state.session_path = str(session_path)
+                    st.session_state.pdf_path = None
 
                     usage = result["usage"]
-                    st.success(
-                        f"✓ Готово — {len(result['markdown']) / 1024:.1f} KB, "
-                        f"{usage['total_tokens']} токенов"
-                    )
+                    st.success(f"✓ HTML сгенерирован — {usage['total_tokens']} токенов")
                     st.session_state.step = 2
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Ошибка: {exc}")
 
-# ─── STEP 2: Edit MD + live preview ───────────────────────────────────────────
+# ─── STEP 2: HTML preview + PDF ───────────────────────────────────────────────
 
 elif st.session_state.step == 2:
-    st.subheader(f"Редактирование: {st.session_state.proposal_name}")
-
-    col_editor, col_preview = st.columns(2)
-
-    with col_editor:
-        st.markdown("**Markdown**")
-        md_text = st.text_area(
-            label="md_editor",
-            value=st.session_state.markdown_text,
-            height=580,
-            label_visibility="collapsed",
-        )
-        st.session_state.markdown_text = md_text
-
-    with col_preview:
-        st.markdown("**Предпросмотр**")
-        preview_html = _md_to_html(md_text)
-        st.components.v1.html(
-            f"""
-            <div style="font-family:sans-serif;font-size:14px;line-height:1.65;
-                        padding:12px 16px;color:#1f2937">
-              {preview_html}
-            </div>
-            """,
-            height=580,
-            scrolling=True,
-        )
-
-    st.divider()
-
-    col_back, col_generate = st.columns([1, 2])
-    with col_back:
-        if st.button("← Назад", use_container_width=True):
-            st.session_state.step = 1
-            st.rerun()
-    with col_generate:
-        if st.button("🤖 Сгенерировать HTML через GPT", type="primary", use_container_width=True):
-            if not st.session_state.api_key:
-                st.error("Введите OpenAI API Key")
-            else:
-                with st.spinner("Генерируем HTML через GPT…"):
-                    try:
-                        _init_api()
-
-                        ensure_dir(PATHS["redact"])
-                        proposal_md_path = PATHS["redact"] / "proposal.md"
-                        proposal_md_path.write_text(
-                            st.session_state.markdown_text, encoding="utf-8"
-                        )
-
-                        result = generate_html_from_file(
-                            proposal_md_path, st.session_state.model
-                        )
-
-                        full_html = create_full_html_document(result["html"], HTML_TEMPLATE)
-                        full_html = fix_prepositions(full_html)
-
-                        timestamp = create_session_timestamp()
-                        session_path = create_session_directory(
-                            timestamp, st.session_state.proposal_name
-                        )
-
-                        src_css = PATHS["src"] / "print.css"
-                        if src_css.exists():
-                            shutil.copy2(src_css, session_path / "print.css")
-                        shutil.copy2(
-                            proposal_md_path,
-                            session_path / f"{st.session_state.proposal_name}.md",
-                        )
-
-                        html_path = session_path / f"{st.session_state.proposal_name}.html"
-                        html_path.write_text(full_html, encoding="utf-8")
-
-                        st.session_state.html_content = full_html
-                        st.session_state.session_path = str(session_path)
-                        st.session_state.pdf_path = None
-
-                        usage = result["usage"]
-                        st.success(f"✓ HTML сгенерирован — {usage['total_tokens']} токенов")
-                        st.session_state.step = 3
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Ошибка: {exc}")
-
-# ─── STEP 3: HTML preview + PDF ───────────────────────────────────────────────
-
-elif st.session_state.step == 3:
     st.subheader(f"HTML и PDF: {st.session_state.proposal_name}")
 
     tab_preview, tab_pdf = st.tabs(["👁 Предпросмотр HTML", "🖨 Генерация PDF"])
 
     with tab_preview:
-        st.components.v1.html(st.session_state.html_content, height=820, scrolling=True)
+        # Inject viewport width override so content fills the iframe properly
+        preview_html = st.session_state.html_content.replace(
+            "<style>",
+            "<style>html,body{background:#fff!important;} .page{max-width:100%!important;padding:32px 40px!important;}",
+            1,
+        )
+        st.components.v1.html(preview_html, height=860, scrolling=True)
 
     with tab_pdf:
         col_gen, col_download = st.columns([1, 1])
@@ -304,12 +296,34 @@ elif st.session_state.step == 3:
             if st.button("🖨 Сгенерировать PDF", type="primary", use_container_width=True):
                 with st.spinner("Рендерим PDF через Playwright…"):
                     try:
-                        result = generate_pdf(st.session_state.logo_key)
+                        import asyncio
+                        import concurrent.futures
+
+                        def _run_pdf(logo_key):
+                            # Windows: threads get SelectorEventLoop by default,
+                            # which does not support subprocesses.
+                            # ProactorEventLoop is required for Playwright.
+                            asyncio.set_event_loop_policy(
+                                asyncio.WindowsProactorEventLoopPolicy()
+                            )
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            try:
+                                return generate_pdf(logo_key)
+                            finally:
+                                loop.close()
+
+                        logo_key = st.session_state.logo_key
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                            result = ex.submit(_run_pdf, logo_key).result()
+
                         st.session_state.pdf_path = result["path"]
                         st.success(f"✓ Готово за {result['elapsed']:.1f}с")
                         st.rerun()
                     except Exception as exc:
+                        import traceback
                         st.error(f"Ошибка: {exc}")
+                        st.code(traceback.format_exc())
 
         with col_download:
             if st.session_state.pdf_path and Path(st.session_state.pdf_path).exists():
@@ -326,14 +340,14 @@ elif st.session_state.step == 3:
 
     st.divider()
 
-    col_back_md, col_regen = st.columns(2)
-    with col_back_md:
+    col_back, col_regen = st.columns(2)
+    with col_back:
         if st.button("← Редактировать MD", use_container_width=True):
-            st.session_state.step = 2
+            st.session_state.step = 1
             st.rerun()
     with col_regen:
         if st.button("🔄 Перегенерировать HTML", use_container_width=True):
-            st.session_state.step = 2
+            st.session_state.step = 1
             st.session_state.html_content = ""
             st.session_state.pdf_path = None
             st.rerun()
